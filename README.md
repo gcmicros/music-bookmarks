@@ -33,6 +33,7 @@ node index.js [options]
 -i, --index <number>        Download only the specified index from the links array
 -l, --list                  List all YouTube links without downloading
 -m, --metadata              Add metadata to downloaded files (default: true)
+-v, --verbose               Show verbose output
 -h, --help                  Display help information
 -V, --version               Display version information
 ```
@@ -62,6 +63,11 @@ node index.js -b bookmarks.html -i 5
 Download without adding metadata:
 ```bash
 node index.js -b bookmarks.html --no-metadata
+```
+
+Show verbose output:
+```bash
+node index.js -b bookmarks.html -v
 ```
 
 ## How It Works

@@ -8,6 +8,7 @@
 - Added command-line interface for customization
 - Updated README.md with usage instructions
 - Added metadata tagging to downloaded files
+- Added better comments and colored logging
 
 ## Project Summary
 This project uses yt-dlp to download audio from YouTube videos listed in bookmarks.
@@ -39,6 +40,7 @@ The script does the following:
    - ✅ Add progress tracking for downloads (batch processing)
    - ✅ Implement proper logging
    - ✅ Add metadata tagging to downloaded files
+   - ✅ Add better comments and colored logging
 3. Improve user experience:
    - ✅ Add command-line arguments for customization:
      - ✅ Option to specify bookmarks file path
@@ -47,6 +49,7 @@ The script does the following:
      - ✅ Option to filter videos by keywords
      - ✅ Option to specify audio format
      - ✅ Option to enable/disable metadata
+     - ✅ Option for verbose output
    - ✅ Create better output formatting
 4. Future improvements:
    - Add download progress bar
@@ -77,9 +80,14 @@ The script does the following:
   - Extracts metadata from YouTube video information
   - Downloads and embeds thumbnails as album art
   - Adds title, artist, album, year, and description information
+- Added better comments and colored logging:
+  - Implemented a custom logging function with colors and timestamps
+  - Added detailed JSDoc comments to all functions
+  - Added verbose logging throughout the application
+  - Added a verbose mode option to show debug information
 
 ## Next Steps
-- Test the metadata tagging functionality
+- Test the enhanced logging functionality
 - Consider adding a progress bar for downloads
 - Consider implementing a retry mechanism for failed downloads
 - Consider adding support for other video platforms

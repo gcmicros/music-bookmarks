@@ -1,8 +1,75 @@
+/**
+ * Bookmark-DLP - A tool to download audio from YouTube links in a bookmarks file
+ * 
+ * This script extracts YouTube links from a Chrome/Firefox bookmarks HTML file,
+ * downloads the audio using yt-dlp, and adds metadata tags to the files.
+ * 
+ * @author Your Name
+ * @version 1.0.0
+ */
+
 const { spawn, exec, execSync } = require('child_process');
 const fs = require('fs');
 const { program } = require('commander');
 const path = require('path');
 const NodeID3 = require('node-id3');
+
+// Configure console colors for better logging
+const colors = {
+  reset: '\x1b[0m',
+  bright: '\x1b[1m',
+  dim: '\x1b[2m',
+  red: '\x1b[31m',
+  green: '\x1b[32m',
+  yellow: '\x1b[33m',
+  blue: '\x1b[34m',
+  magenta: '\x1b[35m',
+  cyan: '\x1b[36m'
+};
+
+/**
+ * Log a message with color and timestamp
+ * @param {string} message - Message to log
+ * @param {string} type - Type of log (info, success, error, warning)
+ */
+function log(message, type = 'info') {
+  const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19);
+  let color = colors.reset;
+  let prefix = '';
+  
+  switch (type) {
+    case 'success':
+      color = colors.green;
+      prefix = '✅ ';
+      break;
+    case 'error':
+      color = colors.red;
+      prefix = '❌ ';
+      break;
+    case 'warning':
+      color = colors.yellow;
+      prefix = '⚠️ ';
+      break;
+    case 'info':
+      color = colors.blue;
+      prefix = 'ℹ️ ';
+      break;
+    case 'debug':
+      color = colors.dim;
+      prefix = '🔍 ';
+      break;
+    case 'start':
+      color = colors.cyan;
+      prefix = '🚀 ';
+      break;
+    case 'complete':
+      color = colors.green;
+      prefix = '🏁 ';
+      break;
+  }
+  
+  console.log(`${color}[${timestamp}] ${prefix}${message}${colors.reset}`);
+}
 
 /**
  * Parse a JSON string safely
@@ -11,9 +78,9 @@ const NodeID3 = require('node-id3');
  */
 function isJsonString(str) {
     try {
-        return JSON.parse(str)
+        return JSON.parse(str);
     } catch (error) {
-        //console.log('failed to parse line');  
+        log(`Failed to parse JSON: ${str.substring(0, 50)}...`, 'debug');
         return false;
     }
 }
@@ -26,10 +93,11 @@ function isJsonString(str) {
 async function downloadThumbnail(url) {
     return new Promise((resolve) => {
         try {
+            log(`Downloading thumbnail from: ${url}`, 'debug');
             const https = require('https');
             https.get(url, (response) => {
                 if (response.statusCode !== 200) {
-                    console.error(`Failed to download thumbnail: HTTP ${response.statusCode}`);
+                    log(`Failed to download thumbnail: HTTP ${response.statusCode}`, 'error');
                     resolve(null);
                     return;
                 }
@@ -38,14 +106,15 @@ async function downloadThumbnail(url) {
                 response.on('data', (chunk) => chunks.push(chunk));
                 response.on('end', () => {
                     const buffer = Buffer.concat(chunks);
+                    log(`Thumbnail downloaded successfully (${buffer.length} bytes)`, 'debug');
                     resolve(buffer);
                 });
             }).on('error', (error) => {
-                console.error(`Error downloading thumbnail: ${error.message}`);
+                log(`Error downloading thumbnail: ${error.message}`, 'error');
                 resolve(null);
             });
         } catch (error) {
-            console.error(`Error in downloadThumbnail: ${error.message}`);
+            log(`Error in downloadThumbnail: ${error.message}`, 'error');
             resolve(null);
         }
     });
@@ -60,6 +129,8 @@ async function downloadThumbnail(url) {
 async function addMetadata(filePath, metadata) {
     return new Promise((resolve) => {
         try {
+            log(`Adding metadata to: ${path.basename(filePath)}`, 'info');
+            
             // Create tags object
             const tags = {
                 title: metadata.title || '',
@@ -82,31 +153,59 @@ async function addMetadata(filePath, metadata) {
                 }
             };
 
+            // Log metadata details
+            log(`Metadata details:`, 'debug');
+            log(`- Title: ${tags.title}`, 'debug');
+            log(`- Artist: ${tags.artist}`, 'debug');
+            log(`- Album: ${tags.album}`, 'debug');
+            log(`- Year: ${tags.year}`, 'debug');
+            log(`- Thumbnail: ${metadata.thumbnailBuffer ? 'Present' : 'Missing'}`, 'debug');
+
             // Write tags to file
             const success = NodeID3.write(tags, filePath);
-            console.log(`Metadata ${success ? 'added to' : 'failed for'} ${path.basename(filePath)}`);
+            log(`Metadata ${success ? 'added successfully to' : 'failed for'} ${path.basename(filePath)}`, success ? 'success' : 'error');
             resolve(success);
         } catch (error) {
-            console.error(`Error adding metadata: ${error.message}`);
+            log(`Error adding metadata: ${error.message}`, 'error');
             resolve(false);
         }
     });
 }
 
+/**
+ * Download audio from a YouTube link using yt-dlp
+ * @param {string} link - YouTube URL to download
+ * @param {object} options - Download options
+ * @param {string} options.outputDir - Output directory for downloaded files
+ * @param {string} options.format - Output format (mp3, m4a, etc.)
+ * @param {boolean} options.audioOnly - Whether to download audio only
+ * @param {boolean} options.addMetadata - Whether to add metadata to the file
+ * @returns {Promise<object>} - Download result
+ */
 async function yt_dlp(link, options = {}) {
-    return new Promise( (resolve, reject) => {
+    return new Promise((resolve, reject) => {
         try {
-            console.log(`Started download: ${link}`);
+            log(`Starting download: ${link}`, 'start');
 
             // Get video information using yt-dlp
+            log(`Fetching video information...`, 'debug');
             const output = execSync(`yt-dlp -F -J "${link}"`, {encoding: 'utf8'});
             if (output.includes('Video unavailable')) {
-                throw new Error('could not find video.');
+                throw new Error('Could not find video. It may be unavailable or private.');
             }
+            
+            // Parse JSON output from yt-dlp
             const [json] = output.split('\n')
                 .map(isJsonString)
                 .filter(l => l !== false);
+                
+            if (!json) {
+                throw new Error('Failed to parse video information');
+            }
+            
+            log(`Video information retrieved: "${json.title}" by ${json.uploader || json.channel || 'Unknown'}`, 'info');
 
+            // Sanitize title for filename
             const title = json.title
                 .replace(/[\/\\?%*:|<>]/g, '_')  // Replace invalid characters with '_'
                 .replace(/\s+/g, '_')             // Replace spaces with underscores
@@ -116,6 +215,7 @@ async function yt_dlp(link, options = {}) {
             // Filter formats based on options
             let formats = json.formats;
             if (options.audioOnly) {
+                log(`Filtering for audio-only formats...`, 'debug');
                 formats = formats.filter(f => f?.resolution == 'audio only');
             }
             
@@ -125,26 +225,33 @@ async function yt_dlp(link, options = {}) {
                 throw new Error('Failed to find suitable format');
             }
             
+            // Select format and prepare output path
             const formatId = options.formatId || formatIds[0];
             const outputPath = path.join(options.outputDir || '.', `${title}.${options.format || 'mp3'}`);
             
+            log(`Selected format: ${formatId}`, 'debug');
+            log(`Output path: ${outputPath}`, 'debug');
+            
             // Download the video/audio
+            log(`Downloading content...`, 'info');
             exec(`yt-dlp "${link}" -f ${formatId} -o "${outputPath}"`, async (error, stdout, stderr) => {
                 if (error) {
-                    console.error(`Error downloading ${link}: ${error.message}`);
+                    log(`Error downloading ${link}: ${error.message}`, 'error');
                     reject(error);
                     return;
                 }
                 
                 if (stderr) {
-                    console.log(`stderr: ${stderr}`);
+                    log(`yt-dlp stderr: ${stderr}`, 'warning');
                 }
                 
-                console.log(`Download completed: ${outputPath}`);
+                log(`Download completed: ${outputPath}`, 'success');
                 
                 // Add metadata if enabled
                 if (options.addMetadata !== false) {
                     try {
+                        log(`Processing metadata for ${path.basename(outputPath)}...`, 'info');
+                        
                         // Extract metadata from the JSON
                         const metadata = {
                             title: json.title,
@@ -158,17 +265,18 @@ async function yt_dlp(link, options = {}) {
                         
                         // Download thumbnail if available
                         if (json.thumbnail) {
-                            console.log(`Downloading thumbnail for ${title}...`);
+                            log(`Downloading thumbnail for ${title}...`, 'info');
                             metadata.thumbnailBuffer = await downloadThumbnail(json.thumbnail);
                         }
                         
                         // Add metadata to the file
                         await addMetadata(outputPath, metadata);
                     } catch (metadataError) {
-                        console.error(`Error adding metadata: ${metadataError.message}`);
+                        log(`Error adding metadata: ${metadataError.message}`, 'error');
                     }
                 }
                 
+                log(`Processing complete for: ${link}`, 'complete');
                 resolve({
                     title,
                     path: outputPath,
@@ -176,26 +284,38 @@ async function yt_dlp(link, options = {}) {
                 });
             });
         } catch (error) {
-            console.log(`Failed to download ${link}: ${error.message}`);
+            log(`Failed to download ${link}: ${error.message}`, 'error');
             reject(error);
         }
     });
 }
 
+/**
+ * Extract YouTube links from a bookmarks HTML file
+ * @param {string} bookmarksPath - Path to the bookmarks.html file
+ * @returns {string[]} - Array of YouTube URLs
+ */
 function fetchYoutubeLinks(bookmarksPath) {
     try {
+        log(`Reading bookmarks file: ${bookmarksPath}`, 'info');
+        
         // Read the file
         const fileContent = fs.readFileSync(bookmarksPath, 'utf-8');
+        log(`Bookmarks file read successfully (${fileContent.length} bytes)`, 'debug');
 
         // Match all HREF attributes inside <A> tags
-        const hrefs = [...fileContent.matchAll(/<A[^>]*HREF="([^"]+)"/gi)]
-            .map(match => match[1])  // Extract URLs
-            .filter(url => url.includes('youtube.com')); // Filter only YouTube links
+        const allLinks = [...fileContent.matchAll(/<A[^>]*HREF="([^"]+)"/gi)]
+            .map(match => match[1]);
+            
+        log(`Found ${allLinks.length} total links in bookmarks file`, 'debug');
+        
+        // Filter only YouTube links
+        const youtubeLinks = allLinks.filter(url => url.includes('youtube.com'));
 
-        console.log(`Found ${hrefs.length} YouTube links in bookmarks file`);
-        return hrefs;
+        log(`Found ${youtubeLinks.length} YouTube links in bookmarks file`, 'success');
+        return youtubeLinks;
     } catch (error) {
-        console.error(`Error reading bookmarks file: ${error.message}`);
+        log(`Error reading bookmarks file: ${error.message}`, 'error');
         return [];
     }
 }
@@ -214,21 +334,29 @@ program
     .option('-i, --index <number>', 'Download only the specified index from the links array')
     .option('-l, --list', 'List all YouTube links without downloading')
     .option('-m, --metadata', 'Add metadata to downloaded files', true)
+    .option('-v, --verbose', 'Show verbose output')
     .parse(process.argv);
 
 const options = program.opts();
 
+/**
+ * Main function - Entry point of the application
+ */
 async function main() {
     try {
+        log(`Bookmark-DLP started`, 'start');
+        
         // Get links from bookmarks file or use default array
         let links;
         if (options.bookmarks) {
+            log(`Using bookmarks file: ${options.bookmarks}`, 'info');
             links = fetchYoutubeLinks(options.bookmarks);
             if (links.length === 0) {
-                console.error('No YouTube links found in the bookmarks file');
+                log('No YouTube links found in the bookmarks file', 'error');
                 return;
             }
         } else {
+            log('No bookmarks file specified, using default YouTube links', 'warning');
             links = [
                 'https://www.youtube.com/watch?v=FXw-CsKgX-k&t=3097s',
                 'https://www.youtube.com/watch?v=3XTV6pkQne0',
@@ -239,30 +367,34 @@ async function main() {
                 'https://www.youtube.com/watch?v=Pi7l8mMjYVE&list=PLMrJAkhIeNNR20Mz-VpzgfQs5zrYi085m',
                 'https://www.youtube.com/watch?v=kB6U0SGeYrM&t=45s'
             ];
-            console.log('Using default YouTube links (no bookmarks file specified)');
+            log(`Loaded ${links.length} default YouTube links`, 'info');
         }
 
         // Filter by keyword if provided
         if (options.keyword) {
             const originalCount = links.length;
             links = links.filter(link => link.includes(options.keyword));
-            console.log(`Filtered links by keyword "${options.keyword}": ${links.length}/${originalCount} links remaining`);
+            log(`Filtered links by keyword "${options.keyword}": ${links.length}/${originalCount} links remaining`, 'info');
         }
 
         // List mode - just show the links and exit
         if (options.list) {
-            console.log('YouTube links found:');
+            log('YouTube links found:', 'info');
             links.forEach((link, index) => {
-                console.log(`${index}: ${link}`);
+                log(`${index}: ${link}`, 'info');
             });
+            log('Listing complete, exiting without downloading', 'complete');
             return;
         }
 
         // Create output directory if it doesn't exist
         if (options.output && options.output !== '.') {
             if (!fs.existsSync(options.output)) {
+                log(`Creating output directory: ${options.output}`, 'info');
                 fs.mkdirSync(options.output, { recursive: true });
-                console.log(`Created output directory: ${options.output}`);
+                log(`Output directory created successfully`, 'success');
+            } else {
+                log(`Using existing output directory: ${options.output}`, 'info');
             }
         }
 
@@ -270,28 +402,32 @@ async function main() {
         if (options.index !== undefined) {
             const index = parseInt(options.index);
             if (index >= 0 && index < links.length) {
-                console.log(`Downloading single video at index ${index}: ${links[index]}`);
+                log(`Downloading single video at index ${index}: ${links[index]}`, 'start');
                 await yt_dlp(links[index], {
                     outputDir: options.output,
                     format: options.format,
                     audioOnly: options.audioOnly,
                     addMetadata: options.metadata
                 });
+                log(`Single video download complete`, 'complete');
                 return;
             } else {
-                console.error(`Invalid index: ${options.index}. Must be between 0 and ${links.length - 1}`);
+                log(`Invalid index: ${options.index}. Must be between 0 and ${links.length - 1}`, 'error');
                 return;
             }
         }
 
         // Download all videos with concurrency limit
-        console.log(`Starting download of ${links.length} videos with concurrency limit of ${options.concurrent}`);
+        const concurrentLimit = parseInt(options.concurrent);
+        log(`Starting download of ${links.length} videos with concurrency limit of ${concurrentLimit}`, 'start');
         
         // Process links in batches to respect concurrency limit
-        const concurrentLimit = parseInt(options.concurrent);
+        const totalBatches = Math.ceil(links.length / concurrentLimit);
         for (let i = 0; i < links.length; i += concurrentLimit) {
             const batch = links.slice(i, i + concurrentLimit);
-            console.log(`Processing batch ${Math.floor(i/concurrentLimit) + 1}/${Math.ceil(links.length/concurrentLimit)}`);
+            const batchNumber = Math.floor(i / concurrentLimit) + 1;
+            
+            log(`Processing batch ${batchNumber}/${totalBatches} (${batch.length} links)`, 'info');
             
             const downloadPromises = batch.map(link => yt_dlp(link, {
                 outputDir: options.output,
@@ -303,20 +439,25 @@ async function main() {
             const results = await Promise.allSettled(downloadPromises);
             
             // Log results for this batch
+            log(`Batch ${batchNumber}/${totalBatches} results:`, 'info');
             results.forEach((result, index) => {
                 const link = batch[index];
                 if (result.status === 'fulfilled') {
-                    console.log(`✅ ${link}: Success`);
+                    log(`${link}: Success`, 'success');
                 } else {
-                    console.log(`❌ ${link}: Failed - ${result.reason}`);
+                    log(`${link}: Failed - ${result.reason}`, 'error');
                 }
             });
+            
+            log(`Batch ${batchNumber}/${totalBatches} completed`, 'complete');
         }
         
-        console.log("All downloads completed");
+        log("All downloads completed successfully", 'complete');
     } catch (error) {
-        console.error(`An error occurred: ${error.message}`);
+        log(`An error occurred: ${error.message}`, 'error');
+        log(`Stack trace: ${error.stack}`, 'debug');
     }
 }
 
+// Run the main function
 main();
