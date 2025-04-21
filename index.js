@@ -1,5 +1,7 @@
 const { spawn, exec, execSync } = require('child_process');
 const fs = require('fs');
+const { program } = require('commander');
+const path = require('path');
 
 function isJsonString(str) {
     try {
@@ -10,10 +12,10 @@ function isJsonString(str) {
     }
 }
 
-async function yt_dlp(link) {
+async function yt_dlp(link, options = {}) {
     return new Promise( (resolve, reject) => {
         try {
-            console.log(`started download: ${link}`);
+            console.log(`Started download: ${link}`);
 
             const output = execSync(`yt-dlp -F -J "${link}"`, {encoding: 'utf8'});
             if (output.includes('Video unavailable')) {
@@ -29,19 +31,23 @@ async function yt_dlp(link) {
                 .replace(/[^a-zA-Z0-9._-]/g, '')  // Remove any non-alphanumeric character except underscores, periods, and hyphens
                 .toLowerCase();
 
-            const audioIds = json.formats
-                .filter(f => f?.resolution == 'audio only')
-                .map(a => a.format_id);
-
-            if (!audioIds) {
-                throw new Error('failed to find audio id');
+            // Filter formats based on options
+            let formats = json.formats;
+            if (options.audioOnly) {
+                formats = formats.filter(f => f?.resolution == 'audio only');
             }
-            //console.log(audioIds);
-            //console.log(json);
-            const audioId = audioIds[0];
+            
+            const formatIds = formats.map(a => a.format_id);
+
+            if (!formatIds || formatIds.length === 0) {
+                throw new Error('Failed to find suitable format');
+            }
+            
+            const formatId = options.formatId || formatIds[0];
+            const outputPath = path.join(options.outputDir || '.', `${title}.${options.format || 'mp3'}`);
             
             // Use exec with a callback to properly handle completion
-            exec(`yt-dlp "${link}" -f ${audioId} -o ${title}.mp3`, (error, stdout, stderr) => {
+            exec(`yt-dlp "${link}" -f ${formatId} -o "${outputPath}"`, (error, stdout, stderr) => {
                 if (error) {
                     console.error(`Error downloading ${link}: ${error.message}`);
                     reject(error);
@@ -50,61 +56,152 @@ async function yt_dlp(link) {
                 if (stderr) {
                     console.log(`stderr: ${stderr}`);
                 }
-                console.log(`Download completed: ${title}.mp3`);
-                resolve('success');
+                console.log(`Download completed: ${outputPath}`);
+                resolve({
+                    title,
+                    path: outputPath,
+                    status: 'success'
+                });
             });
-            //spawn(`yt-dlp`, [link, `-f ${audioId}`, `-o ${title}.mp3`]);
-
-            resolve('success');
         } catch (error) {
-            console.log('failed');
-            //console.error(error);
+            console.log(`Failed to download ${link}: ${error.message}`);
+            reject(error);
         }
     });
 }
 
-function fetchYoutubeLinks() {
-    // Read the file
-    const fileContent = fs.readFileSync('bookmarks.html', 'utf-8');
+function fetchYoutubeLinks(bookmarksPath) {
+    try {
+        // Read the file
+        const fileContent = fs.readFileSync(bookmarksPath, 'utf-8');
 
-    // Match all HREF attributes inside <A> tags
-    const hrefs = [...fileContent.matchAll(/<A[^>]*HREF="([^"]+)"/gi)]
-        .map(match => match[1])  // Extract URLs
-        .filter(url => url.includes('youtube.com')); // Filter only YouTube links
+        // Match all HREF attributes inside <A> tags
+        const hrefs = [...fileContent.matchAll(/<A[^>]*HREF="([^"]+)"/gi)]
+            .map(match => match[1])  // Extract URLs
+            .filter(url => url.includes('youtube.com')); // Filter only YouTube links
 
-        // Print extracted URLs
+        console.log(`Found ${hrefs.length} YouTube links in bookmarks file`);
         return hrefs;
+    } catch (error) {
+        console.error(`Error reading bookmarks file: ${error.message}`);
+        return [];
     }
+}
+
+// Setup command-line options
+program
+    .name('bookmark-dlp')
+    .description('Download audio from YouTube links in a bookmarks file')
+    .version('1.0.0')
+    .option('-b, --bookmarks <path>', 'Path to bookmarks.html file')
+    .option('-o, --output <directory>', 'Output directory for downloaded files', '.')
+    .option('-f, --format <format>', 'Output format (mp3, m4a, etc.)', 'mp3')
+    .option('-c, --concurrent <number>', 'Maximum number of concurrent downloads', '3')
+    .option('-k, --keyword <keyword>', 'Only download URLs containing this keyword')
+    .option('-a, --audio-only', 'Download audio only', true)
+    .option('-i, --index <number>', 'Download only the specified index from the links array')
+    .option('-l, --list', 'List all YouTube links without downloading')
+    .parse(process.argv);
+
+const options = program.opts();
 
 async function main() {
-    //const links = fetchYoutubeLinks();
-    const links = [
-  'https://www.youtube.com/watch?v=FXw-CsKgX-k&t=3097s',
-  'https://www.youtube.com/watch?v=3XTV6pkQne0',
-  'https://www.youtube.com/watch?v=amfAAzhjC0E',
-  'https://www.youtube.com/watch?v=vN4Vc9T8QQc',
-  'https://www.youtube.com/watch?v=f1qTRHGqaQI',
-  'https://www.youtube.com/watch?v=FfrJrvF7gcU',
-  'https://www.youtube.com/watch?v=Pi7l8mMjYVE&list=PLMrJAkhIeNNR20Mz-VpzgfQs5zrYi085m',
-  'https://www.youtube.com/watch?v=kB6U0SGeYrM&t=45s'
-]
+    try {
+        // Get links from bookmarks file or use default array
+        let links;
+        if (options.bookmarks) {
+            links = fetchYoutubeLinks(options.bookmarks);
+            if (links.length === 0) {
+                console.error('No YouTube links found in the bookmarks file');
+                return;
+            }
+        } else {
+            links = [
+                'https://www.youtube.com/watch?v=FXw-CsKgX-k&t=3097s',
+                'https://www.youtube.com/watch?v=3XTV6pkQne0',
+                'https://www.youtube.com/watch?v=amfAAzhjC0E',
+                'https://www.youtube.com/watch?v=vN4Vc9T8QQc',
+                'https://www.youtube.com/watch?v=f1qTRHGqaQI',
+                'https://www.youtube.com/watch?v=FfrJrvF7gcU',
+                'https://www.youtube.com/watch?v=Pi7l8mMjYVE&list=PLMrJAkhIeNNR20Mz-VpzgfQs5zrYi085m',
+                'https://www.youtube.com/watch?v=kB6U0SGeYrM&t=45s'
+            ];
+            console.log('Using default YouTube links (no bookmarks file specified)');
+        }
 
-    // Download a single video for testing
-    console.log("Downloading single video for testing...");
-    await yt_dlp(links[4]);
+        // Filter by keyword if provided
+        if (options.keyword) {
+            const originalCount = links.length;
+            links = links.filter(link => link.includes(options.keyword));
+            console.log(`Filtered links by keyword "${options.keyword}": ${links.length}/${originalCount} links remaining`);
+        }
 
-    // Download all videos
-    console.log("Starting download of all videos...");
-    const downloadPromises = links.map(link => yt_dlp(link));
-    const results = await Promise.allSettled(downloadPromises);
-    
-    // Log results
-    console.log("Download results:");
-    results.forEach((result, index) => {
-        console.log(`${links[index]}: ${result.status}`);
-    });
-    
-    console.log("All downloads completed");
+        // List mode - just show the links and exit
+        if (options.list) {
+            console.log('YouTube links found:');
+            links.forEach((link, index) => {
+                console.log(`${index}: ${link}`);
+            });
+            return;
+        }
+
+        // Create output directory if it doesn't exist
+        if (options.output && options.output !== '.') {
+            if (!fs.existsSync(options.output)) {
+                fs.mkdirSync(options.output, { recursive: true });
+                console.log(`Created output directory: ${options.output}`);
+            }
+        }
+
+        // Download a single video by index if specified
+        if (options.index !== undefined) {
+            const index = parseInt(options.index);
+            if (index >= 0 && index < links.length) {
+                console.log(`Downloading single video at index ${index}: ${links[index]}`);
+                await yt_dlp(links[index], {
+                    outputDir: options.output,
+                    format: options.format,
+                    audioOnly: options.audioOnly
+                });
+                return;
+            } else {
+                console.error(`Invalid index: ${options.index}. Must be between 0 and ${links.length - 1}`);
+                return;
+            }
+        }
+
+        // Download all videos with concurrency limit
+        console.log(`Starting download of ${links.length} videos with concurrency limit of ${options.concurrent}`);
+        
+        // Process links in batches to respect concurrency limit
+        const concurrentLimit = parseInt(options.concurrent);
+        for (let i = 0; i < links.length; i += concurrentLimit) {
+            const batch = links.slice(i, i + concurrentLimit);
+            console.log(`Processing batch ${Math.floor(i/concurrentLimit) + 1}/${Math.ceil(links.length/concurrentLimit)}`);
+            
+            const downloadPromises = batch.map(link => yt_dlp(link, {
+                outputDir: options.output,
+                format: options.format,
+                audioOnly: options.audioOnly
+            }));
+            
+            const results = await Promise.allSettled(downloadPromises);
+            
+            // Log results for this batch
+            results.forEach((result, index) => {
+                const link = batch[index];
+                if (result.status === 'fulfilled') {
+                    console.log(`✅ ${link}: Success`);
+                } else {
+                    console.log(`❌ ${link}: Failed - ${result.reason}`);
+                }
+            });
+        }
+        
+        console.log("All downloads completed");
+    } catch (error) {
+        console.error(`An error occurred: ${error.message}`);
+    }
 }
 
 main();

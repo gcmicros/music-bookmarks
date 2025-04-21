@@ -5,6 +5,8 @@
 - State file created
 - Fixed Promise handling in main function
 - Improved exec implementation to properly handle completion
+- Added command-line interface for customization
+- Updated README.md with usage instructions
 
 ## Project Summary
 This project uses yt-dlp to download audio from YouTube videos listed in bookmarks.
@@ -29,15 +31,24 @@ The script does the following:
 
 ## Plans
 1. Fix issues in the current implementation:
-   - Correct the Promise handling in the main function
-   - Ensure proper error handling
+   - ✅ Correct the Promise handling in the main function
+   - ✅ Ensure proper error handling in the download function
 2. Enhance functionality:
-   - Add progress tracking for downloads
-   - Implement proper logging
-   - Add option to use bookmarks.html instead of hardcoded links
+   - ✅ Add option to use bookmarks.html instead of hardcoded links
+   - ✅ Add progress tracking for downloads (batch processing)
+   - ✅ Implement proper logging
 3. Improve user experience:
-   - Add command-line arguments for customization
-   - Create better output formatting
+   - ✅ Add command-line arguments for customization:
+     - ✅ Option to specify bookmarks file path
+     - ✅ Option to specify output directory
+     - ✅ Option to limit number of concurrent downloads
+     - ✅ Option to filter videos by keywords
+     - ✅ Option to specify audio format
+   - ✅ Create better output formatting
+4. Future improvements:
+   - Add download progress bar
+   - Implement retry mechanism for failed downloads
+   - Add support for other video platforms
 
 ## Learnings
 - The script uses yt-dlp to extract audio from YouTube videos
@@ -51,8 +62,16 @@ The script does the following:
   - Added proper callback handling to resolve/reject the Promise only after the download completes
   - Added better error handling and logging
   - This ensures the Promise accurately represents the download status
+- Added command-line interface using Commander.js:
+  - Allows specifying bookmarks file path
+  - Supports output directory configuration
+  - Implements concurrent download limiting
+  - Provides filtering by keyword
+  - Enables listing links without downloading
+  - Allows downloading a specific link by index
 
 ## Next Steps
-- Test the improved implementation with proper Promise handling
-- Next: Implement the bookmarks.html parsing functionality
-- Later: Add better error handling and logging throughout the application
+- Test the command-line interface with various options
+- Consider adding a progress bar for downloads
+- Consider implementing a retry mechanism for failed downloads
+- Consider adding support for other video platforms
