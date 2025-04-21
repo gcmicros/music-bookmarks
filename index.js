@@ -39,7 +39,20 @@ async function yt_dlp(link) {
             //console.log(audioIds);
             //console.log(json);
             const audioId = audioIds[0];
-            execSync(`yt-dlp "${link}" -f ${audioId} -o ${title}.mp3`);
+            
+            // Use exec with a callback to properly handle completion
+            exec(`yt-dlp "${link}" -f ${audioId} -o ${title}.mp3`, (error, stdout, stderr) => {
+                if (error) {
+                    console.error(`Error downloading ${link}: ${error.message}`);
+                    reject(error);
+                    return;
+                }
+                if (stderr) {
+                    console.log(`stderr: ${stderr}`);
+                }
+                console.log(`Download completed: ${title}.mp3`);
+                resolve('success');
+            });
             //spawn(`yt-dlp`, [link, `-f ${audioId}`, `-o ${title}.mp3`]);
 
             resolve('success');
@@ -76,12 +89,22 @@ async function main() {
   'https://www.youtube.com/watch?v=kB6U0SGeYrM&t=45s'
 ]
 
-    yt_dlp(links[4]);
+    // Download a single video for testing
+    console.log("Downloading single video for testing...");
+    await yt_dlp(links[4]);
 
-    console.log(links);
-    const ps = links.forEach( l => yt_dlp(l));
-    const res = await Promise.allSettled(ps);
-    return;
+    // Download all videos
+    console.log("Starting download of all videos...");
+    const downloadPromises = links.map(link => yt_dlp(link));
+    const results = await Promise.allSettled(downloadPromises);
+    
+    // Log results
+    console.log("Download results:");
+    results.forEach((result, index) => {
+        console.log(`${links[index]}: ${result.status}`);
+    });
+    
+    console.log("All downloads completed");
 }
 
 main();

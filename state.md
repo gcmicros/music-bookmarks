@@ -3,6 +3,8 @@
 ## Current Status
 - Initial analysis of index.js completed
 - State file created
+- Fixed Promise handling in main function
+- Improved exec implementation to properly handle completion
 
 ## Project Summary
 This project uses yt-dlp to download audio from YouTube videos listed in bookmarks.
@@ -40,9 +42,17 @@ The script does the following:
 ## Learnings
 - The script uses yt-dlp to extract audio from YouTube videos
 - It currently has a hardcoded list of YouTube links rather than using the bookmarks.html parser
-- There's a potential issue with Promise handling in the main function
+- Fixed Promise handling in the main function:
+  - The original code used `forEach` which doesn't work properly with async functions
+  - Changed to use `map` to create an array of promises
+  - Used `Promise.allSettled` to properly wait for all downloads to complete
+  - Added better logging of results
+- Improved the `exec` implementation:
+  - Added proper callback handling to resolve/reject the Promise only after the download completes
+  - Added better error handling and logging
+  - This ensures the Promise accurately represents the download status
 
 ## Next Steps
-- Fix the Promise handling in the main function
-- Test the bookmarks.html parsing functionality
-- Implement better error handling and logging
+- Test the improved implementation with proper Promise handling
+- Next: Implement the bookmarks.html parsing functionality
+- Later: Add better error handling and logging throughout the application
