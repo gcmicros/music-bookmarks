@@ -1,13 +1,21 @@
 {
   "name": "bookmark-dlp",
   "version": "1.0.0",
+  "description": "Download audio from YouTube links in a bookmarks file",
   "main": "index.js",
   "scripts": {
+    "start": "node index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "keywords": [
+    "youtube",
+    "download",
+    "bookmarks",
+    "audio",
+    "yt-dlp"
+  ],
   "author": "",
   "license": "ISC",
-  "description": "",
   "dependencies": {
     "commander": "^13.1.0",
     "music-metadata": "^11.2.1",

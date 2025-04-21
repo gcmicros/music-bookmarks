@@ -70,6 +70,21 @@ Show verbose output:
 node index.js -b bookmarks.html -v
 ```
 
+## Project Structure
+
+```
+bookmark-dlp/
+├── index.js           # Main entry point
+├── package.json       # Project dependencies
+├── README.md          # Documentation
+└── src/               # Source code modules
+    ├── bookmarks.js   # Bookmarks file handling
+    ├── cli.js         # Command-line interface setup
+    ├── downloader.js  # YouTube download functionality
+    ├── logger.js      # Logging utilities
+    └── metadata.js    # Audio metadata handling
+```
+
 ## How It Works
 
 1. Parses a Chrome/Firefox bookmarks HTML file to extract YouTube links
