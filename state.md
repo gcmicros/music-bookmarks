@@ -7,6 +7,7 @@
 - Improved exec implementation to properly handle completion
 - Added command-line interface for customization
 - Updated README.md with usage instructions
+- Added metadata tagging to downloaded files
 
 ## Project Summary
 This project uses yt-dlp to download audio from YouTube videos listed in bookmarks.
@@ -37,6 +38,7 @@ The script does the following:
    - ✅ Add option to use bookmarks.html instead of hardcoded links
    - ✅ Add progress tracking for downloads (batch processing)
    - ✅ Implement proper logging
+   - ✅ Add metadata tagging to downloaded files
 3. Improve user experience:
    - ✅ Add command-line arguments for customization:
      - ✅ Option to specify bookmarks file path
@@ -44,6 +46,7 @@ The script does the following:
      - ✅ Option to limit number of concurrent downloads
      - ✅ Option to filter videos by keywords
      - ✅ Option to specify audio format
+     - ✅ Option to enable/disable metadata
    - ✅ Create better output formatting
 4. Future improvements:
    - Add download progress bar
@@ -69,9 +72,14 @@ The script does the following:
   - Provides filtering by keyword
   - Enables listing links without downloading
   - Allows downloading a specific link by index
+- Added metadata tagging to downloaded files:
+  - Uses node-id3 to add ID3 tags to MP3 files
+  - Extracts metadata from YouTube video information
+  - Downloads and embeds thumbnails as album art
+  - Adds title, artist, album, year, and description information
 
 ## Next Steps
-- Test the command-line interface with various options
+- Test the metadata tagging functionality
 - Consider adding a progress bar for downloads
 - Consider implementing a retry mechanism for failed downloads
 - Consider adding support for other video platforms

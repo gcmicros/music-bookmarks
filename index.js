@@ -2,7 +2,13 @@ const { spawn, exec, execSync } = require('child_process');
 const fs = require('fs');
 const { program } = require('commander');
 const path = require('path');
+const NodeID3 = require('node-id3');
 
+/**
+ * Parse a JSON string safely
+ * @param {string} str - String to parse
+ * @returns {object|boolean} - Parsed object or false if parsing failed
+ */
 function isJsonString(str) {
     try {
         return JSON.parse(str)
@@ -12,11 +18,87 @@ function isJsonString(str) {
     }
 }
 
+/**
+ * Download a thumbnail image from a URL
+ * @param {string} url - URL of the thumbnail
+ * @returns {Promise<Buffer|null>} - Buffer containing the image data or null if download failed
+ */
+async function downloadThumbnail(url) {
+    return new Promise((resolve) => {
+        try {
+            const https = require('https');
+            https.get(url, (response) => {
+                if (response.statusCode !== 200) {
+                    console.error(`Failed to download thumbnail: HTTP ${response.statusCode}`);
+                    resolve(null);
+                    return;
+                }
+
+                const chunks = [];
+                response.on('data', (chunk) => chunks.push(chunk));
+                response.on('end', () => {
+                    const buffer = Buffer.concat(chunks);
+                    resolve(buffer);
+                });
+            }).on('error', (error) => {
+                console.error(`Error downloading thumbnail: ${error.message}`);
+                resolve(null);
+            });
+        } catch (error) {
+            console.error(`Error in downloadThumbnail: ${error.message}`);
+            resolve(null);
+        }
+    });
+}
+
+/**
+ * Add metadata tags to an audio file
+ * @param {string} filePath - Path to the audio file
+ * @param {object} metadata - Metadata to add to the file
+ * @returns {Promise<boolean>} - True if successful, false otherwise
+ */
+async function addMetadata(filePath, metadata) {
+    return new Promise((resolve) => {
+        try {
+            // Create tags object
+            const tags = {
+                title: metadata.title || '',
+                artist: metadata.artist || 'YouTube',
+                album: metadata.album || 'Downloaded with bookmark-dlp',
+                year: metadata.uploadDate ? metadata.uploadDate.substring(0, 4) : '',
+                comment: {
+                    language: 'eng',
+                    text: `Source: ${metadata.webpage_url || ''}\nDescription: ${metadata.description || ''}`
+                },
+                genre: metadata.categories ? metadata.categories.join(', ') : '',
+                image: {
+                    mime: 'image/jpeg',
+                    type: {
+                        id: 3,
+                        name: 'front cover'
+                    },
+                    description: 'Thumbnail',
+                    imageBuffer: metadata.thumbnailBuffer
+                }
+            };
+
+            // Write tags to file
+            const success = NodeID3.write(tags, filePath);
+            console.log(`Metadata ${success ? 'added to' : 'failed for'} ${path.basename(filePath)}`);
+            resolve(success);
+        } catch (error) {
+            console.error(`Error adding metadata: ${error.message}`);
+            resolve(false);
+        }
+    });
+}
+
 async function yt_dlp(link, options = {}) {
     return new Promise( (resolve, reject) => {
         try {
             console.log(`Started download: ${link}`);
 
+            // Get video information using yt-dlp
             const output = execSync(`yt-dlp -F -J "${link}"`, {encoding: 'utf8'});
             if (output.includes('Video unavailable')) {
                 throw new Error('could not find video.');
@@ -46,17 +128,47 @@ async function yt_dlp(link, options = {}) {
             const formatId = options.formatId || formatIds[0];
             const outputPath = path.join(options.outputDir || '.', `${title}.${options.format || 'mp3'}`);
             
-            // Use exec with a callback to properly handle completion
-            exec(`yt-dlp "${link}" -f ${formatId} -o "${outputPath}"`, (error, stdout, stderr) => {
+            // Download the video/audio
+            exec(`yt-dlp "${link}" -f ${formatId} -o "${outputPath}"`, async (error, stdout, stderr) => {
                 if (error) {
                     console.error(`Error downloading ${link}: ${error.message}`);
                     reject(error);
                     return;
                 }
+                
                 if (stderr) {
                     console.log(`stderr: ${stderr}`);
                 }
+                
                 console.log(`Download completed: ${outputPath}`);
+                
+                // Add metadata if enabled
+                if (options.addMetadata !== false) {
+                    try {
+                        // Extract metadata from the JSON
+                        const metadata = {
+                            title: json.title,
+                            artist: json.uploader || json.channel,
+                            album: json.album || 'YouTube',
+                            uploadDate: json.upload_date,
+                            description: json.description,
+                            webpage_url: json.webpage_url,
+                            categories: json.categories
+                        };
+                        
+                        // Download thumbnail if available
+                        if (json.thumbnail) {
+                            console.log(`Downloading thumbnail for ${title}...`);
+                            metadata.thumbnailBuffer = await downloadThumbnail(json.thumbnail);
+                        }
+                        
+                        // Add metadata to the file
+                        await addMetadata(outputPath, metadata);
+                    } catch (metadataError) {
+                        console.error(`Error adding metadata: ${metadataError.message}`);
+                    }
+                }
+                
                 resolve({
                     title,
                     path: outputPath,
@@ -101,6 +213,7 @@ program
     .option('-a, --audio-only', 'Download audio only', true)
     .option('-i, --index <number>', 'Download only the specified index from the links array')
     .option('-l, --list', 'List all YouTube links without downloading')
+    .option('-m, --metadata', 'Add metadata to downloaded files', true)
     .parse(process.argv);
 
 const options = program.opts();
@@ -161,7 +274,8 @@ async function main() {
                 await yt_dlp(links[index], {
                     outputDir: options.output,
                     format: options.format,
-                    audioOnly: options.audioOnly
+                    audioOnly: options.audioOnly,
+                    addMetadata: options.metadata
                 });
                 return;
             } else {
@@ -182,7 +296,8 @@ async function main() {
             const downloadPromises = batch.map(link => yt_dlp(link, {
                 outputDir: options.output,
                 format: options.format,
-                audioOnly: options.audioOnly
+                audioOnly: options.audioOnly,
+                addMetadata: options.metadata
             }));
             
             const results = await Promise.allSettled(downloadPromises);

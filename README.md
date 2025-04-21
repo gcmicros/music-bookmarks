@@ -32,6 +32,7 @@ node index.js [options]
 -a, --audio-only            Download audio only (default: true)
 -i, --index <number>        Download only the specified index from the links array
 -l, --list                  List all YouTube links without downloading
+-m, --metadata              Add metadata to downloaded files (default: true)
 -h, --help                  Display help information
 -V, --version               Display version information
 ```
@@ -58,12 +59,18 @@ Download a specific link by index:
 node index.js -b bookmarks.html -i 5
 ```
 
+Download without adding metadata:
+```bash
+node index.js -b bookmarks.html --no-metadata
+```
+
 ## How It Works
 
 1. Parses a Chrome/Firefox bookmarks HTML file to extract YouTube links
 2. Uses yt-dlp to download the audio from each link
-3. Supports concurrent downloads with a configurable limit
-4. Provides filtering options to select specific links
+3. Adds metadata to the audio files (title, artist, album, thumbnail, etc.)
+4. Supports concurrent downloads with a configurable limit
+5. Provides filtering options to select specific links
 
 ## License
 
